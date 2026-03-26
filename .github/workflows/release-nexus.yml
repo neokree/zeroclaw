@@ -1,0 +1,155 @@
+name: Release Nexus (Bison Pro)
+
+on:
+  push:
+    branches: [nexus]
+
+concurrency:
+  group: release-nexus
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: Resolve Version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+      short_sha: ${{ steps.ver.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute nexus tag
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha=$(git rev-parse --short HEAD)
+          tag="nexus-$(date -u +%Y%m%d)-${short_sha}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "Nexus release: ${tag}"
+
+  web:
+    name: Build Web Dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build web dashboard
+        run: cd web && npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          retention-days: 1
+
+  build:
+    name: Build aarch64-unknown-linux-gnu
+    needs: [version, web]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+          targets: aarch64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ubuntu-22.04-aarch64-unknown-linux-gnu
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+
+      - name: Install cross compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build release
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --locked --features channel-matrix --target aarch64-unknown-linux-gnu
+
+      - name: Package binary
+        run: |
+          cd target/aarch64-unknown-linux-gnu/release
+          tar czf ../../../zeroclaw-aarch64-unknown-linux-gnu.tar.gz zeroclaw
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeroclaw-aarch64
+          path: zeroclaw-aarch64-unknown-linux-gnu.tar.gz
+          retention-days: 30
+
+  publish:
+    name: Publish Nexus Release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: zeroclaw-aarch64
+          path: artifacts/
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum zeroclaw-aarch64-unknown-linux-gnu.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Generate commit log
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREV_TAG=$(git tag --sort=-creatordate | grep '^nexus-' | head -1 || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          LOG=$(git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges | head -50 || true)
+          if [ -z "$LOG" ]; then
+            LOG="- Incremental update"
+          fi
+
+          {
+            echo "body<<BODY_EOF"
+            echo "## Changes"
+            echo ""
+            echo "$LOG"
+            echo ""
+            echo "---"
+            echo "*Target: aarch64-unknown-linux-gnu (Bison Pro)*"
+            echo "BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          printf '%s\n' "${{ steps.changelog.outputs.body }}" > release-notes.md
+          gh release create "$TAG" artifacts/* \
+            --repo "${{ github.repository }}" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            --latest=false
