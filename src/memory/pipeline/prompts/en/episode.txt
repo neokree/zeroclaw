@@ -1,0 +1,15 @@
+Convert this conversation into a concise third-person narrative.
+
+CONVERSATION:
+{conversation}
+
+Requirements:
+- Chronological factual record with all important info
+- Preserve: person names, dates, locations, emotions, decisions, outcomes
+- Time references as: "relative time (absolute date)"
+- Record frequency information (patterns, repetitions)
+- Remove redundancies while keeping all facts
+- Do NOT include greetings/small talk
+
+Respond ONLY with valid JSON:
+{"subject": "concise title (10-20 words)", "episode": "third-person narrative", "summary": "2-3 sentence abstract"}

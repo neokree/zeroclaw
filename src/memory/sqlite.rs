@@ -232,6 +232,9 @@ impl SqliteMemory {
             conn.execute_batch("ALTER TABLE memories ADD COLUMN superseded_by TEXT;")?;
         }
 
+        // Pipeline tables (created unconditionally — lightweight, no-op if already exist)
+        crate::memory::pipeline::store::PipelineStore::init_schema_sync(conn)?;
+
         Ok(())
     }
 

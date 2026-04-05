@@ -1,0 +1,23 @@
+Analizza questa conversazione e determina se i NUOVI MESSAGGI rappresentano
+un confine tematico (fine di un segmento conversazionale coerente).
+
+CRONOLOGIA CONVERSAZIONE:
+{history}
+
+NUOVI MESSAGGI:
+{new_messages}
+
+Criteri di decisione (per priorità):
+1. Cambiamento Sostanziale di Topic: argomento completamente diverso con contenuto significativo?
+2. Transizione di Intento/Scopo: domanda principale risolta, nuovo argomento sostanziale in corso?
+3. Contenuto Significativo: ignora saluti/chiacchiere, concentrati sul contenuto memorabile
+4. Segnali Temporali: gap di tempo significativo? dichiarazioni conclusive esplicite?
+5. Indipendenza del Contenuto: quanto è correlato il nuovo contenuto alla discussione precedente?
+
+Regole speciali:
+- Saluto + Topic = UN SOLO episodio (non dividere)
+- "A proposito" / "Parlando di" = di solito stesso episodio
+- Congedi/chiusure = fine episodio corrente, non iniziare un nuovo episodio
+
+Rispondi SOLO con JSON valido:
+{"reasoning": "una frase", "should_end": true, "confidence": 0.85, "topic_summary": "riepilogo se should_end, altrimenti stringa vuota"}

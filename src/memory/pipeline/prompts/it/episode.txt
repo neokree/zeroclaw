@@ -1,0 +1,15 @@
+Converti questa conversazione in una narrazione concisa in terza persona.
+
+CONVERSAZIONE:
+{conversation}
+
+Requisiti:
+- Cronaca fattuale in ordine cronologico con tutte le informazioni importanti
+- Preserva: nomi di persone, date, luoghi, emozioni, decisioni, risultati
+- Riferimenti temporali come: "tempo relativo (data assoluta)"
+- Registra informazioni sulla frequenza (schemi, ripetizioni)
+- Rimuovi le ridondanze mantenendo tutti i fatti
+- NON includere saluti/chiacchiere
+
+Rispondi SOLO con JSON valido:
+{"subject": "titolo conciso (10-20 parole)", "episode": "narrazione in terza persona", "summary": "abstract di 2-3 frasi"}

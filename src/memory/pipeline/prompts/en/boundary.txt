@@ -1,0 +1,23 @@
+Analyze this conversation and determine if the NEW MESSAGES represent
+a topic boundary (end of a coherent conversation segment).
+
+CONVERSATION HISTORY:
+{history}
+
+NEW MESSAGES:
+{new_messages}
+
+Decision criteria (priority order):
+1. Substantive Topic Change: completely different topic with meaningful content?
+2. Intent/Purpose Transition: core question resolved, new substantial topic beginning?
+3. Meaningful Content: ignore greetings/small talk, focus on memorable content
+4. Temporal Signals: significant time gap? explicit concluding statements?
+5. Content Independence: how related is new content to previous discussion?
+
+Special rules:
+- Greeting + Topic = ONE episode (do not split)
+- "By the way" / "Speaking of" = usually same episode
+- Farewells/closures = end of current episode, do not start new one
+
+Respond ONLY with valid JSON:
+{"reasoning": "one sentence", "should_end": true, "confidence": 0.85, "topic_summary": "summary if should_end, else empty string"}
