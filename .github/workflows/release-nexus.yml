@@ -146,8 +146,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.version.outputs.tag }}
+          RELEASE_BODY: ${{ steps.changelog.outputs.body }}
         run: |
-          printf '%s\n' "${{ steps.changelog.outputs.body }}" > release-notes.md
+          printf '%s\n' "$RELEASE_BODY" > release-notes.md
           gh release create "$TAG" artifacts/* \
             --repo "${{ github.repository }}" \
             --title "$TAG" \
