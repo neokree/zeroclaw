@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod backend;
+pub mod pipeline;
 pub mod chunker;
 pub mod cli;
 pub mod conflict;

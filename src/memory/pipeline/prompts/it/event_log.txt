@@ -1,0 +1,15 @@
+Estrai fatti atomici da questa conversazione.
+
+CONVERSAZIONE:
+{conversation}
+
+Regole:
+- Ogni fatto = esattamente un'unità coerente (azione, emozione, piano, decisione)
+- Frase singola e completa, forma in terza persona
+- Attribuzione esplicita: specifica sempre CHI ha detto/fatto cosa
+- Risolvi i pronomi con i nomi specifici
+- Preserva i timestamp; risolvi i tempi relativi con date assolute
+- Filtra: saluti, "ok", chiacchiere di basso valore
+
+Rispondi SOLO con JSON valido:
+{"atomic_facts": [{"fact": "frase", "time": "riferimento temporale o null"}]}

@@ -353,6 +353,23 @@ async fn build_context(
     context
 }
 
+/// Build context using the pipeline's XML formatter if available,
+/// falling back to the standard [Memory context] format.
+async fn build_context_with_pipeline(
+    pipeline: Option<&crate::memory::pipeline::Pipeline>,
+    mem: &dyn Memory,
+    user_msg: &str,
+    min_relevance_score: f64,
+    session_id: Option<&str>,
+) -> String {
+    if let Some(pipeline) = pipeline {
+        if pipeline.is_enabled() {
+            return pipeline.build_context(user_msg, min_relevance_score, session_id).await;
+        }
+    }
+    build_context(mem, user_msg, min_relevance_score, session_id).await
+}
+
 /// Build hardware datasheet context from RAG when peripherals are enabled.
 /// Includes pin-alias lookup (e.g. "red_led" → 13) when query matches, plus retrieved chunks.
 fn build_hardware_context(
@@ -3912,7 +3929,8 @@ pub async fn run(
         }
 
         // Inject memory + hardware RAG context into user message
-        let mem_context = build_context(
+        let mem_context = build_context_with_pipeline(
+            None::<&crate::memory::pipeline::Pipeline>,
             mem.as_ref(),
             &effective_msg,
             config.memory.min_relevance_score,
@@ -4190,7 +4208,8 @@ pub async fn run(
             }
 
             // Inject memory + hardware RAG context into user message
-            let mem_context = build_context(
+            let mem_context = build_context_with_pipeline(
+                None::<&crate::memory::pipeline::Pipeline>,
                 mem.as_ref(),
                 &effective_input,
                 config.memory.min_relevance_score,
@@ -4739,7 +4758,8 @@ pub async fn process_message(
     }
 
     let effective_msg_ref = effective_message.as_str();
-    let mem_context = build_context(
+    let mem_context = build_context_with_pipeline(
+        None::<&crate::memory::pipeline::Pipeline>,
         mem.as_ref(),
         effective_msg_ref,
         config.memory.min_relevance_score,

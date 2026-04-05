@@ -1,0 +1,15 @@
+Extract atomic facts from this conversation.
+
+CONVERSATION:
+{conversation}
+
+Rules:
+- Each fact = exactly one coherent unit (action, emotion, plan, decision)
+- Single complete sentence, third-person form
+- Explicit attribution: always state WHO said/did what
+- Resolve pronouns to specific names
+- Preserve timestamps; resolve relative times with absolute dates
+- Filter out: greetings, "okay", low-value chatter
+
+Respond ONLY with valid JSON:
+{"atomic_facts": [{"fact": "sentence", "time": "time reference or null"}]}

@@ -4970,6 +4970,11 @@ pub struct MemoryConfig {
     /// Only used when `backend = "qdrant"`.
     #[serde(default)]
     pub qdrant: QdrantConfig,
+
+    // ── Memory Pipeline ─────────────────────────────────────────
+    /// Memory pipeline configuration (boundary detection, extraction, XML injection)
+    #[serde(default)]
+    pub pipeline: crate::memory::pipeline::PipelineConfig,
 }
 
 /// Memory policy configuration (`[memory.policy]` section).
@@ -5091,6 +5096,7 @@ impl Default for MemoryConfig {
             policy: MemoryPolicyConfig::default(),
             sqlite_open_timeout_secs: None,
             qdrant: QdrantConfig::default(),
+            pipeline: crate::memory::pipeline::PipelineConfig::default(),
         }
     }
 }
