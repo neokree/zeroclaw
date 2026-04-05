@@ -14,6 +14,7 @@ pub struct PipelineConfig {
     pub buffer_ttl_hours: u64,
     pub max_episodic_entries: usize,
     pub max_facts_entries: usize,
+    pub max_foresight_entries: usize,
 }
 
 impl Default for PipelineConfig {
@@ -28,6 +29,7 @@ impl Default for PipelineConfig {
             buffer_ttl_hours: 24,
             max_episodic_entries: 5,
             max_facts_entries: 5,
+            max_foresight_entries: 3,
         }
     }
 }

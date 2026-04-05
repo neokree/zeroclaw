@@ -361,10 +361,11 @@ async fn build_context_with_pipeline(
     user_msg: &str,
     min_relevance_score: f64,
     session_id: Option<&str>,
+    user_id: Option<&str>,
 ) -> String {
     if let Some(pipeline) = pipeline {
         if pipeline.is_enabled() {
-            return pipeline.build_context(user_msg, min_relevance_score, session_id).await;
+            return pipeline.build_context(user_msg, min_relevance_score, session_id, user_id).await;
         }
     }
     build_context(mem, user_msg, min_relevance_score, session_id).await
@@ -3935,6 +3936,7 @@ pub async fn run(
             &effective_msg,
             config.memory.min_relevance_score,
             memory_session_id.as_deref(),
+            None,
         )
         .await;
         let rag_limit = if config.agent.compact_context { 2 } else { 5 };
@@ -4214,6 +4216,7 @@ pub async fn run(
                 &effective_input,
                 config.memory.min_relevance_score,
                 memory_session_id.as_deref(),
+                None,
             )
             .await;
             let rag_limit = if config.agent.compact_context { 2 } else { 5 };
@@ -4764,6 +4767,7 @@ pub async fn process_message(
         effective_msg_ref,
         config.memory.min_relevance_score,
         session_id,
+        None,
     )
     .await;
     let rag_limit = if config.agent.compact_context { 2 } else { 5 };

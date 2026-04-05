@@ -1,0 +1,22 @@
+Basandoti su questa conversazione e sul suo riassunto episodico, genera 4-8
+previsioni su come il comportamento o la situazione dell'utente potrebbe cambiare.
+
+Riassunto episodico:
+{episode_summary}
+
+Conversazione originale:
+{buffer_content}
+
+Usa la "previsione associativa": prevedi impatti comportamentali a livello personale,
+non semplici riassunti.
+
+Ogni previsione deve essere:
+- Specifica, ragionevole e verificabile
+- Massimo 40 parole
+- Fondata su evidenze tratte dalla conversazione
+- Limitata nel tempo (quando inizia, quando scade?)
+
+Rispondi SOLO con JSON valido:
+{"foresights": [{"content": "testo della previsione (max 40 parole)", "evidence": "fatto a supporto tratto dalla conversazione (max 40 parole)", "start_time": "YYYY-MM-DD", "end_time": "YYYY-MM-DD"}]}
+
+Se non è possibile formulare previsioni significative, restituisci {"foresights": []}

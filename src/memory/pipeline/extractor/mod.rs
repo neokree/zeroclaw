@@ -1,6 +1,7 @@
 // src/memory/pipeline/extractor/mod.rs
 pub mod episode;
 pub mod event_log;
+pub mod foresight;
 
 use serde::Deserialize;
 
@@ -30,4 +31,5 @@ pub struct EventLogData {
 pub struct ExtractionResult {
     pub episode: EpisodeData,
     pub event_logs: EventLogData,
+    pub foresights: Vec<foresight::ForesightEntry>,
 }

@@ -1,0 +1,22 @@
+Based on this conversation and its episode summary, generate 4-8
+predictions about how the user's behavior or situation may change.
+
+Episode summary:
+{episode_summary}
+
+Original conversation:
+{buffer_content}
+
+Use "associative prediction": predict personal-level behavioral
+impacts, not summaries.
+
+Each prediction must be:
+- Specific, reasonable, and verifiable
+- Max 40 words
+- Grounded in evidence from the conversation
+- Time-bounded (when does it start, when does it expire?)
+
+Respond ONLY with valid JSON:
+{"foresights": [{"content": "prediction text (max 40 words)", "evidence": "supporting fact from conversation (max 40 words)", "start_time": "YYYY-MM-DD", "end_time": "YYYY-MM-DD"}]}
+
+If no meaningful predictions can be made, return {"foresights": []}

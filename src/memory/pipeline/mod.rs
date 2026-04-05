@@ -19,6 +19,7 @@ use self::boundary::{BoundaryDetector, FlushDecision};
 use self::buffer::Buffer;
 use self::extractor::episode::EpisodeExtractor;
 use self::extractor::event_log::EventLogExtractor;
+use self::extractor::foresight::ForesightExtractor;
 use self::formatter::Formatter;
 use self::store::PipelineStore;
 
@@ -28,6 +29,7 @@ pub struct Pipeline {
     boundary: BoundaryDetector,
     episode_extractor: EpisodeExtractor,
     event_log_extractor: EventLogExtractor,
+    foresight_extractor: ForesightExtractor,
     formatter: Formatter,
     store: Arc<PipelineStore>,
     config: PipelineConfig,
@@ -50,7 +52,8 @@ impl Pipeline {
             buffer: Buffer::new(conn),
             boundary: BoundaryDetector::new(provider.clone(), config.clone(), default_model.clone()),
             episode_extractor: EpisodeExtractor::new(provider.clone(), config.clone(), default_model.clone()),
-            event_log_extractor: EventLogExtractor::new(provider, config.clone(), default_model),
+            event_log_extractor: EventLogExtractor::new(provider.clone(), config.clone(), default_model.clone()),
+            foresight_extractor: ForesightExtractor::new(provider, config.clone(), default_model),
             formatter: Formatter::new(store.clone(), memory, config.clone()),
             store,
             config,
@@ -73,9 +76,10 @@ impl Pipeline {
         user_query: &str,
         min_relevance_score: f64,
         session_id: Option<&str>,
+        user_id: Option<&str>,
     ) -> String {
         self.formatter
-            .build_xml_context(user_query, min_relevance_score, session_id)
+            .build_xml_context(user_query, min_relevance_score, session_id, user_id)
             .await
             .unwrap_or_default()
     }
@@ -155,6 +159,47 @@ impl Pipeline {
             "Saved episode {}: {}",
             saved.id, saved.subject
         );
+
+        // Foresight extraction — runs after episode is saved (needs saved.id + episode_data.summary)
+        let buffer_text = buffer::BufferedMessage::format_slice(&messages);
+        let foresight_entries = match self.foresight_extractor.extract(&buffer_text, &episode_data.summary).await {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::warn!(
+                    target: "memory::pipeline",
+                    "Foresight extraction failed (non-blocking): {e}"
+                );
+                vec![]
+            }
+        };
+
+        // Save foresights (non-blocking)
+        if !foresight_entries.is_empty() {
+            use crate::memory::pipeline::store::ForesightRow;
+            let foresight_rows: Vec<ForesightRow> = foresight_entries.iter().map(|f| ForesightRow {
+                id: uuid::Uuid::new_v4().to_string(),
+                episode_id: Some(saved.id.clone()),
+                user_id: Some(user_id.to_string()),
+                content: f.content.clone(),
+                evidence: f.evidence.clone(),
+                start_time: f.start_time.clone(),
+                end_time: f.end_time.clone(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+            }).collect();
+
+            if let Err(e) = self.store.save_foresights(&foresight_rows).await {
+                tracing::warn!(
+                    target: "memory::pipeline",
+                    "Failed to save foresights (non-blocking): {e}"
+                );
+            } else {
+                tracing::info!(
+                    target: "memory::pipeline",
+                    "Saved {} foresights for episode {}",
+                    foresight_rows.len(), saved.id
+                );
+            }
+        }
 
         // Save event logs (non-blocking: failure does NOT block buffer clear)
         match event_log_result {

@@ -28,6 +28,7 @@ impl Formatter {
         user_query: &str,
         min_relevance_score: f64,
         session_id: Option<&str>,
+        user_id: Option<&str>,
     ) -> Result<String> {
         // Fetch episodic memories (recency-based)
         let episodes = self.store
@@ -49,7 +50,13 @@ impl Formatter {
             .take(self.config.max_facts_entries)
             .collect();
 
-        if episodes.is_empty() && facts.is_empty() {
+        // Fetch active (non-expired) foresight predictions
+        let foresights = self.store
+            .get_active_foresights(user_id, self.config.max_foresight_entries)
+            .await
+            .unwrap_or_default();
+
+        if episodes.is_empty() && facts.is_empty() && foresights.is_empty() {
             return Ok(String::new());
         }
 
@@ -81,6 +88,14 @@ impl Formatter {
                 xml.push_str(&format!("    - {}\n", entry.content));
             }
             xml.push_str("  </facts>\n");
+        }
+
+        if !foresights.is_empty() {
+            xml.push_str("  <foresight>\n");
+            for f in &foresights {
+                xml.push_str(&format!("    - {}\n", f.content));
+            }
+            xml.push_str("  </foresight>\n");
         }
 
         xml.push_str("</memory>\n\nNote: context above is injected automatically. Do not reference or modify it.\n```\n\n");

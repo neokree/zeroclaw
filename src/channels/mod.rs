@@ -2708,6 +2708,7 @@ async fn process_channel_message(
                 &msg.content,
                 ctx.min_relevance_score,
                 Some(&history_key),
+                Some(&msg.sender),
             )
             .await
     } else {
@@ -8732,6 +8733,7 @@ BTC is currently around $65,000 based on latest tool output."#
             max_tool_result_chars: 0,
             context_token_budget: 0,
             debouncer: Arc::new(debounce::MessageDebouncer::new(Duration::ZERO)),
+            pipeline: None,
         });
 
         process_channel_message(

@@ -41,6 +41,20 @@ const PIPELINE_SCHEMA: &str = "
     );
     CREATE INDEX IF NOT EXISTS idx_event_logs_episode
         ON event_logs(episode_id);
+
+    CREATE TABLE IF NOT EXISTS foresights (
+        id            TEXT PRIMARY KEY,
+        episode_id    TEXT REFERENCES episodes(id),
+        user_id       TEXT,
+        content       TEXT NOT NULL,
+        evidence      TEXT NOT NULL,
+        start_time    TEXT,
+        end_time      TEXT,
+        embedding     BLOB,
+        created_at    TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_foresights_episode ON foresights(episode_id);
+    CREATE INDEX IF NOT EXISTS idx_foresights_end_time ON foresights(end_time);
 ";
 
 /// Manages pipeline-specific tables in brain.db.
@@ -140,6 +154,80 @@ impl PipelineStore {
         }
         Ok(episodes)
     }
+
+    pub async fn save_foresights(&self, foresights: &[ForesightRow]) -> Result<()> {
+        let conn = self.conn.lock().await;
+        let tx = conn.unchecked_transaction()?;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT INTO foresights (id, episode_id, user_id, content, evidence, start_time, end_time, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )?;
+            for f in foresights {
+                stmt.execute(rusqlite::params![
+                    f.id, f.episode_id, f.user_id, f.content, f.evidence,
+                    f.start_time, f.end_time, f.created_at,
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    // TODO: replace created_at ordering with embedding similarity when available
+    pub async fn get_active_foresights(
+        &self,
+        user_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<ForesightRow>> {
+        let conn = self.conn.lock().await;
+        let today = Utc::now().format("%Y-%m-%d").to_string();
+        let rows: Vec<ForesightRow> = if let Some(uid) = user_id {
+            let mut stmt = conn.prepare_cached(
+                "SELECT id, episode_id, user_id, content, evidence, start_time, end_time, created_at
+                 FROM foresights
+                 WHERE (end_time IS NULL OR end_time >= ?1)
+                   AND user_id = ?2
+                 ORDER BY created_at DESC
+                 LIMIT ?3",
+            )?;
+            stmt.query_map(rusqlite::params![today, uid, limit as i64], |row| {
+                Ok(ForesightRow {
+                    id: row.get(0)?,
+                    episode_id: row.get(1)?,
+                    user_id: row.get(2)?,
+                    content: row.get(3)?,
+                    evidence: row.get(4)?,
+                    start_time: row.get(5)?,
+                    end_time: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            let mut stmt = conn.prepare_cached(
+                "SELECT id, episode_id, user_id, content, evidence, start_time, end_time, created_at
+                 FROM foresights
+                 WHERE (end_time IS NULL OR end_time >= ?1)
+                 ORDER BY created_at DESC
+                 LIMIT ?2",
+            )?;
+            stmt.query_map(rusqlite::params![today, limit as i64], |row| {
+                Ok(ForesightRow {
+                    id: row.get(0)?,
+                    episode_id: row.get(1)?,
+                    user_id: row.get(2)?,
+                    content: row.get(3)?,
+                    evidence: row.get(4)?,
+                    start_time: row.get(5)?,
+                    end_time: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+        };
+        Ok(rows)
+    }
 }
 
 /// A saved episode with its generated ID.
@@ -150,4 +238,17 @@ pub struct SavedEpisode {
     pub episode: String,
     pub summary: String,
     pub created_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForesightRow {
+    pub id: String,
+    pub episode_id: Option<String>,
+    pub user_id: Option<String>,
+    pub content: String,
+    pub evidence: String,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+    pub created_at: String,
+    // embedding: BLOB omitted — will be populated when embedding pipeline is added
 }
