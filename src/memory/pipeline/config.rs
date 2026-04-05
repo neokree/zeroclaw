@@ -15,6 +15,7 @@ pub struct PipelineConfig {
     pub max_episodic_entries: usize,
     pub max_facts_entries: usize,
     pub max_foresight_entries: usize,
+    pub profile_update_interval: usize,
 }
 
 impl Default for PipelineConfig {
@@ -30,6 +31,7 @@ impl Default for PipelineConfig {
             max_episodic_entries: 5,
             max_facts_entries: 5,
             max_foresight_entries: 3,
+            profile_update_interval: 5,
         }
     }
 }

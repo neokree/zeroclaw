@@ -5,6 +5,8 @@ pub mod store;
 pub mod boundary;
 pub mod extractor;
 pub mod formatter;
+pub mod profile_types;
+pub mod merger;
 
 pub use config::PipelineConfig;
 
@@ -20,11 +22,16 @@ use self::buffer::Buffer;
 use self::extractor::episode::EpisodeExtractor;
 use self::extractor::event_log::EventLogExtractor;
 use self::extractor::foresight::ForesightExtractor;
+use self::extractor::profile;
 use self::formatter::Formatter;
+use self::merger::merge_profiles;
+use self::profile_types::ProfileData;
 use self::store::PipelineStore;
 
 /// Memory Pipeline — boundary detection, extraction, and XML injection.
 pub struct Pipeline {
+    provider: Arc<dyn Provider>,
+    default_model: String,
     buffer: Buffer,
     boundary: BoundaryDetector,
     episode_extractor: EpisodeExtractor,
@@ -49,6 +56,8 @@ impl Pipeline {
         let store = Arc::new(store);
         let conn = store.connection();
         Self {
+            provider: provider.clone(),
+            default_model: default_model.clone(),
             buffer: Buffer::new(conn),
             boundary: BoundaryDetector::new(provider.clone(), config.clone(), default_model.clone()),
             episode_extractor: EpisodeExtractor::new(provider.clone(), config.clone(), default_model.clone()),
@@ -225,6 +234,81 @@ impl Pipeline {
                     target: "memory::pipeline",
                     "EventLog extraction failed (episode saved, buffer will clear): {e}"
                 );
+            }
+        }
+
+        // --- Profile trigger (Phase 3) ---
+        // Increment episode_count AFTER saving episode+event_logs+foresights.
+        // If save succeeded but counter increment fails, profile trigger may be
+        // delayed by one episode — acceptable for a best-effort feature.
+        let episode_count = match self.store.increment_episode_count(user_id).await {
+            Ok(count) => count,
+            Err(e) => {
+                tracing::warn!(
+                    target: "memory::pipeline",
+                    "Failed to increment episode count (non-blocking): {e}"
+                );
+                0
+            }
+        };
+
+        if episode_count > 0
+            && episode_count as usize % self.config.profile_update_interval == 0
+        {
+            let recent_episodes = self
+                .store
+                .get_recent_episodes(user_id, self.config.profile_update_interval)
+                .await
+                .unwrap_or_default();
+
+            if !recent_episodes.is_empty() {
+                let current_profile = match self.store.get_profile(user_id).await {
+                    Ok(Some(row)) => serde_json::from_str::<ProfileData>(&row.profile_data)
+                        .unwrap_or_default(),
+                    _ => ProfileData::default(),
+                };
+
+                let extraction_model = self
+                    .config
+                    .extraction_model
+                    .as_deref()
+                    .unwrap_or(&self.default_model);
+
+                match profile::extract(
+                    self.provider.as_ref(),
+                    extraction_model,
+                    &current_profile,
+                    &recent_episodes,
+                    &self.config.prompt_language,
+                )
+                .await
+                {
+                    Ok(new_profile) => {
+                        let merged = merge_profiles(&current_profile, &new_profile);
+                        let merged_json = serde_json::to_string(&merged).unwrap_or_default();
+                        if let Err(e) = self
+                            .store
+                            .upsert_profile(user_id, &merged_json, 0.0, &saved.id)
+                            .await
+                        {
+                            tracing::warn!(
+                                target: "memory::pipeline",
+                                "Failed to save profile (non-blocking): {e}"
+                            );
+                        } else {
+                            tracing::info!(
+                                target: "memory::pipeline",
+                                "Profile updated for user {user_id} at episode count {episode_count}"
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "memory::pipeline",
+                            "Profile extraction failed (non-blocking): {e}"
+                        );
+                    }
+                }
             }
         }
 

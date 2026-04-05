@@ -55,6 +55,19 @@ const PIPELINE_SCHEMA: &str = "
     );
     CREATE INDEX IF NOT EXISTS idx_foresights_episode ON foresights(episode_id);
     CREATE INDEX IF NOT EXISTS idx_foresights_end_time ON foresights(end_time);
+
+    CREATE TABLE IF NOT EXISTS profiles (
+        id              TEXT PRIMARY KEY,
+        user_id         TEXT NOT NULL UNIQUE,
+        profile_data    TEXT NOT NULL,
+        confidence      REAL DEFAULT 0.0,
+        version         INTEGER DEFAULT 1,
+        episode_count   INTEGER DEFAULT 0,
+        last_episode_id TEXT,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user ON profiles(user_id);
 ";
 
 /// Manages pipeline-specific tables in brain.db.
@@ -228,6 +241,99 @@ impl PipelineStore {
         };
         Ok(rows)
     }
+
+    pub async fn get_profile(&self, user_id: &str) -> Result<Option<ProfileRow>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, user_id, profile_data, confidence, version, episode_count,
+                    last_episode_id, created_at, updated_at
+             FROM profiles WHERE user_id = ?1",
+        )?;
+        let result = stmt.query_row(rusqlite::params![user_id], |row| {
+            Ok(ProfileRow {
+                id: row.get(0)?,
+                user_id: row.get(1)?,
+                profile_data: row.get(2)?,
+                confidence: row.get(3)?,
+                version: row.get(4)?,
+                episode_count: row.get(5)?,
+                last_episode_id: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        });
+        match result {
+            Ok(row) => Ok(Some(row)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub async fn upsert_profile(
+        &self,
+        user_id: &str,
+        profile_data_json: &str,
+        confidence: f64,
+        last_episode_id: &str,
+    ) -> Result<()> {
+        let conn = self.conn.lock().await;
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO profiles (id, user_id, profile_data, confidence, version, episode_count, last_episode_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, 1, 1, ?5, ?6, ?6)
+             ON CONFLICT(user_id) DO UPDATE SET
+               profile_data = ?3,
+               confidence = ?4,
+               version = version + 1,
+               last_episode_id = ?5,
+               updated_at = ?6",
+            rusqlite::params![Uuid::new_v4().to_string(), user_id, profile_data_json, confidence, last_episode_id, now],
+        )?;
+        Ok(())
+    }
+
+    /// Increment episode_count for a user. Returns the new count.
+    /// Creates the profile row if it doesn't exist (with empty profile_data).
+    pub async fn increment_episode_count(&self, user_id: &str) -> Result<i64> {
+        let conn = self.conn.lock().await;
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO profiles (id, user_id, profile_data, confidence, version, episode_count, created_at, updated_at)
+             VALUES (?1, ?2, '{}', 0.0, 1, 1, ?3, ?3)
+             ON CONFLICT(user_id) DO UPDATE SET
+               episode_count = episode_count + 1,
+               updated_at = ?3",
+            rusqlite::params![Uuid::new_v4().to_string(), user_id, now],
+        )?;
+        let count: i64 = conn.query_row(
+            "SELECT episode_count FROM profiles WHERE user_id = ?1",
+            rusqlite::params![user_id],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+
+    /// Retrieves the last N episodes for a given user_id, to pass to the profile extractor.
+    pub async fn get_recent_episodes(&self, user_id: &str, limit: usize) -> Result<Vec<SavedEpisode>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, subject, summary, episode, created_at
+             FROM episodes
+             WHERE user_id = ?1
+             ORDER BY created_at DESC
+             LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![user_id, limit as i64], |row| {
+            Ok(SavedEpisode {
+                id: row.get(0)?,
+                subject: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                summary: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                episode: row.get(3)?,
+                created_at: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
 }
 
 /// A saved episode with its generated ID.
@@ -251,4 +357,17 @@ pub struct ForesightRow {
     pub end_time: Option<String>,
     pub created_at: String,
     // embedding: BLOB omitted — will be populated when embedding pipeline is added
+}
+
+#[derive(Debug, Clone)]
+pub struct ProfileRow {
+    pub id: String,
+    pub user_id: String,
+    pub profile_data: String, // JSON string
+    pub confidence: f64,
+    pub version: i64,
+    pub episode_count: i64,
+    pub last_episode_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }

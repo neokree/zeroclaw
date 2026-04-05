@@ -3,6 +3,7 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use crate::memory::pipeline::config::PipelineConfig;
+use crate::memory::pipeline::profile_types::ProfileData;
 use crate::memory::pipeline::store::PipelineStore;
 use crate::memory::traits::Memory;
 
@@ -56,11 +57,33 @@ impl Formatter {
             .await
             .unwrap_or_default();
 
-        if episodes.is_empty() && facts.is_empty() && foresights.is_empty() {
+        // Fetch user profile (Phase 3)
+        let profile_text = if let Some(uid) = user_id {
+            match self.store.get_profile(uid).await {
+                Ok(Some(row)) => {
+                    if let Ok(profile) = serde_json::from_str::<ProfileData>(&row.profile_data) {
+                        render_trait(&profile)
+                    } else {
+                        String::new()
+                    }
+                }
+                _ => String::new(),
+            }
+        } else {
+            String::new()
+        };
+
+        if episodes.is_empty() && facts.is_empty() && foresights.is_empty() && profile_text.is_empty() {
             return Ok(String::new());
         }
 
         let mut xml = String::from("```text\n<memory>\n");
+
+        if !profile_text.is_empty() {
+            xml.push_str("  <trait>\n");
+            xml.push_str(&profile_text);
+            xml.push_str("\n  </trait>\n");
+        }
 
         if !episodes.is_empty() {
             xml.push_str("  <episodic>\n");
@@ -102,4 +125,55 @@ impl Formatter {
 
         Ok(xml)
     }
+}
+
+/// Converts a ProfileData into a human-readable summary for the <trait> XML section.
+fn render_trait(profile: &ProfileData) -> String {
+    let mut lines = Vec::new();
+
+    if let Some(name) = &profile.user_name {
+        lines.push(format!("    Name: {name}"));
+    }
+
+    // Skills: combine hard + soft with levels
+    let skills: Vec<String> = profile
+        .hard_skills
+        .iter()
+        .chain(profile.soft_skills.iter())
+        .map(|s| format!("{} ({})", s.value, s.level))
+        .collect();
+    if !skills.is_empty() {
+        lines.push(format!("    Skills: {}", skills.join(", ")));
+    }
+
+    // Personality
+    let traits: Vec<&str> = profile.personality.iter().map(|a| a.value.as_str()).collect();
+    if !traits.is_empty() {
+        lines.push(format!("    Personality: {}", traits.join(", ")));
+    }
+
+    // Goals
+    let goals: Vec<&str> = profile.user_goal.iter().map(|a| a.value.as_str()).collect();
+    if !goals.is_empty() {
+        lines.push(format!("    Goals: {}", goals.join(", ")));
+    }
+
+    // Preferences (working_habit + tendency)
+    let prefs: Vec<&str> = profile
+        .working_habit_preference
+        .iter()
+        .chain(profile.tendency.iter())
+        .map(|a| a.value.as_str())
+        .collect();
+    if !prefs.is_empty() {
+        lines.push(format!("    Preferences: {}", prefs.join(", ")));
+    }
+
+    // Interests
+    let interests: Vec<&str> = profile.interests.iter().map(|a| a.value.as_str()).collect();
+    if !interests.is_empty() {
+        lines.push(format!("    Interests: {}", interests.join(", ")));
+    }
+
+    lines.join("\n")
 }

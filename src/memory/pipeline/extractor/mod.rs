@@ -2,6 +2,7 @@
 pub mod episode;
 pub mod event_log;
 pub mod foresight;
+pub mod profile;
 
 use serde::Deserialize;
 

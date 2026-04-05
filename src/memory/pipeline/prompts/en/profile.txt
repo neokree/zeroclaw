@@ -1,0 +1,36 @@
+Analyze these conversation episodes and extract/update the user profile.
+
+Current profile (may be empty if first extraction):
+{current_profile_json}
+
+New episodes to analyze:
+{recent_episodes}
+
+For each attribute, provide evidence (episode IDs that support it).
+For skill-like attributes, assign a level: "beginner", "intermediate", "advanced", "expert".
+
+Respond ONLY with valid JSON matching this schema:
+{
+  "user_name": "string or null",
+  "hard_skills": [{"value": "skill name", "level": "level", "evidences": ["ep_id"]}],
+  "soft_skills": [{"value": "skill name", "level": "level", "evidences": ["ep_id"]}],
+  "personality": [{"value": "trait description", "evidences": ["ep_id"]}],
+  "way_of_decision_making": [{"value": "description", "evidences": ["ep_id"]}],
+  "interests": [{"value": "interest", "evidences": ["ep_id"]}],
+  "user_goal": [{"value": "goal", "evidences": ["ep_id"]}],
+  "work_responsibility": [{"value": "responsibility", "evidences": ["ep_id"]}],
+  "working_habit_preference": [{"value": "preference", "evidences": ["ep_id"]}],
+  "tendency": [{"value": "tendency", "evidences": ["ep_id"]}],
+  "motivation_system": [{"value": "motivation", "level": "level", "evidences": ["ep_id"]}],
+  "fear_system": [{"value": "fear", "level": "level", "evidences": ["ep_id"]}],
+  "value_system": [{"value": "value", "level": "level", "evidences": ["ep_id"]}],
+  "humor_use": [{"value": "humor style", "level": "level", "evidences": ["ep_id"]}],
+  "colloquialism": [{"value": "speech pattern", "level": "level", "evidences": ["ep_id"]}]
+}
+
+Rules:
+- Merge with existing profile: update levels if evidence is stronger, add new attributes
+- Keep highest level when conflicting evidence exists
+- Truncate evidences to max 10 per attribute
+- Only add attributes with clear evidence, never speculate
+- Omit empty arrays (attributes with no evidence)

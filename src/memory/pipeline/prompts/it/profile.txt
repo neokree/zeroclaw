@@ -1,0 +1,36 @@
+Analizza questi episodi di conversazione ed estrai/aggiorna il profilo utente.
+
+Profilo attuale (può essere vuoto se è la prima estrazione):
+{current_profile_json}
+
+Nuovi episodi da analizzare:
+{recent_episodes}
+
+Per ogni attributo, fornisci le evidenze (ID degli episodi che lo supportano).
+Per gli attributi con livello, assegna uno tra: "beginner", "intermediate", "advanced", "expert".
+
+Rispondi SOLO con JSON valido con questa struttura (le chiavi JSON devono restare in inglese):
+{
+  "user_name": "stringa o null",
+  "hard_skills": [{"value": "nome competenza", "level": "livello", "evidences": ["ep_id"]}],
+  "soft_skills": [{"value": "nome competenza", "level": "livello", "evidences": ["ep_id"]}],
+  "personality": [{"value": "descrizione tratto", "evidences": ["ep_id"]}],
+  "way_of_decision_making": [{"value": "descrizione", "evidences": ["ep_id"]}],
+  "interests": [{"value": "interesse", "evidences": ["ep_id"]}],
+  "user_goal": [{"value": "obiettivo", "evidences": ["ep_id"]}],
+  "work_responsibility": [{"value": "responsabilità", "evidences": ["ep_id"]}],
+  "working_habit_preference": [{"value": "preferenza lavorativa", "evidences": ["ep_id"]}],
+  "tendency": [{"value": "tendenza", "evidences": ["ep_id"]}],
+  "motivation_system": [{"value": "motivazione", "level": "livello", "evidences": ["ep_id"]}],
+  "fear_system": [{"value": "paura", "level": "livello", "evidences": ["ep_id"]}],
+  "value_system": [{"value": "valore", "level": "livello", "evidences": ["ep_id"]}],
+  "humor_use": [{"value": "stile umoristico", "level": "livello", "evidences": ["ep_id"]}],
+  "colloquialism": [{"value": "pattern linguistico", "level": "livello", "evidences": ["ep_id"]}]
+}
+
+Regole:
+- Integra con il profilo esistente: aggiorna i livelli se le evidenze sono più forti, aggiungi nuovi attributi
+- Mantieni il livello più alto in caso di evidenze contrastanti
+- Tronca le evidenze a max 10 per attributo
+- Aggiungi attributi solo con evidenze chiare, mai speculare
+- Ometti gli array vuoti (attributi senza evidenze)
