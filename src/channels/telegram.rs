@@ -1226,6 +1226,11 @@ Allowlist Telegram username (without '@') or numeric user ID.",
             chat_id.clone()
         };
 
+        // Send ACK reaction immediately, before the slow STT transcription.
+        if self.ack_reactions {
+            self.try_add_ack_reaction_nonblocking(chat_id.clone(), message_id);
+        }
+
         // Download and transcribe
         let file_path = match self.get_file_path(&file_id).await {
             Ok(p) => p,
